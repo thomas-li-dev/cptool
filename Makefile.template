@@ -7,13 +7,32 @@ FASTFLAGS = -O2 -std=c++17 $(WARNFLAGS)
 
 CXXFLAGS = $(DEBUGFLAGS)
 
+PCHHEADER = $(PCHDIR)/bits/stdc++.h
+PCHDEBUG = $(PCHDIR)/bits/stdc++.h.gch/debug.gch
+PCHFAST = $(PCHDIR)/bits/stdc++.h.gch/fast.gch
+
 all: $(PROG)
 
-$(PROG): $(PROG).cpp
+$(PROG): $(PROG).cpp | $(PCHDEBUG)
 	g++ $(CXXFLAGS) -I$(PCHDIR) -o $(PROG) $(PROG).cpp
 
-fast:
+fast: | $(PCHFAST)
 	g++ $(FASTFLAGS) -I$(PCHDIR) -o $(PROG) $(PROG).cpp
+
+# Auto-build precompiled headers if missing
+$(PCHHEADER):
+	@mkdir -p $(dir $@)
+	@printf '#pragma GCC system_header\n#include_next <bits/stdc++.h>\n' > $@
+
+$(PCHDEBUG): $(PCHHEADER)
+	@mkdir -p $(dir $@)
+	@echo "Building debug precompiled header..."
+	@g++ -x c++-header $(DEBUGFLAGS) -I$(PCHDIR) -o $@ $<
+
+$(PCHFAST): $(PCHHEADER)
+	@mkdir -p $(dir $@)
+	@echo "Building fast precompiled header..."
+	@g++ -x c++-header $(FASTFLAGS) -I$(PCHDIR) -o $@ $<
 
 test: $(PROG)
 	@passed=0; failed=0; total=0; \
@@ -46,7 +65,7 @@ test: $(PROG)
 	fi
 
 # Generic rule for building other .cpp files in this directory
-%: %.cpp
+%: %.cpp | $(PCHDEBUG)
 	g++ $(CXXFLAGS) -I$(PCHDIR) -o $@ $<
 
 clean:

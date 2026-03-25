@@ -541,6 +541,96 @@ class TestMakefilePCH(TempDirMixin, unittest.TestCase):
         self.assertIn("PCHDIR", content)
         self.assertIn("-I$(PCHDIR)", content)
 
+    def test_makefile_has_pch_auto_build_rules(self):
+        with open(cptool.MAKEFILE_TEMPLATE) as f:
+            content = f.read()
+        self.assertIn("PCHHEADER", content)
+        self.assertIn("PCHDEBUG", content)
+        self.assertIn("PCHFAST", content)
+        self.assertIn("g++ -x c++-header $(DEBUGFLAGS)", content)
+        self.assertIn("g++ -x c++-header $(FASTFLAGS)", content)
+
+    def test_makefile_auto_builds_pch(self):
+        """Test that make auto-builds PCH if missing, then compiles."""
+        # Use isolated PCH dir to avoid affecting real cache
+        pch_dir = os.path.join(self.tmpdir, "pch")
+
+        # Create problem directory with source file
+        prob_dir = os.path.join(self.tmpdir, "prob")
+        os.makedirs(os.path.join(prob_dir, "samples"))
+        with open(os.path.join(prob_dir, "prob.cpp"), "w") as f:
+            f.write('#include <bits/stdc++.h>\n'
+                    'using namespace std;\n'
+                    'signed main() { cout << 42 << endl; }\n')
+
+        # Write Makefile from template, overriding PCHDIR
+        with open(cptool.MAKEFILE_TEMPLATE) as f:
+            makefile = f.read().replace("__PROG__", "prob")
+        # Override PCHDIR to use our temp dir
+        makefile = makefile.replace(
+            "PCHDIR = $(HOME)/.cache/cptool/pch",
+            f"PCHDIR = {pch_dir}",
+        )
+        with open(os.path.join(prob_dir, "Makefile"), "w") as f:
+            f.write(makefile)
+
+        # PCH should not exist yet
+        self.assertFalse(os.path.exists(
+            os.path.join(pch_dir, "bits", "stdc++.h.gch", "debug.gch")))
+
+        # Running make should auto-build PCH then compile
+        result = subprocess.run(
+            ["make"], cwd=prob_dir,
+            capture_output=True, text=True, timeout=120,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        # PCH should now exist
+        self.assertTrue(os.path.exists(
+            os.path.join(pch_dir, "bits", "stdc++.h.gch", "debug.gch")))
+        # Binary should exist
+        self.assertTrue(os.path.isfile(os.path.join(prob_dir, "prob")))
+
+        # Verify output is correct
+        run = subprocess.run(
+            [os.path.join(prob_dir, "prob")],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(run.stdout.strip(), "42")
+
+    def test_makefile_fast_auto_builds_pch(self):
+        """Test that make fast auto-builds fast PCH if missing."""
+        pch_dir = os.path.join(self.tmpdir, "pch")
+
+        prob_dir = os.path.join(self.tmpdir, "prob")
+        os.makedirs(os.path.join(prob_dir, "samples"))
+        with open(os.path.join(prob_dir, "prob.cpp"), "w") as f:
+            f.write('#include <bits/stdc++.h>\n'
+                    'using namespace std;\n'
+                    'signed main() { cout << 99 << endl; }\n')
+
+        with open(cptool.MAKEFILE_TEMPLATE) as f:
+            makefile = f.read().replace("__PROG__", "prob")
+        makefile = makefile.replace(
+            "PCHDIR = $(HOME)/.cache/cptool/pch",
+            f"PCHDIR = {pch_dir}",
+        )
+        with open(os.path.join(prob_dir, "Makefile"), "w") as f:
+            f.write(makefile)
+
+        result = subprocess.run(
+            ["make", "fast"], cwd=prob_dir,
+            capture_output=True, text=True, timeout=120,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        # Fast PCH should exist
+        self.assertTrue(os.path.exists(
+            os.path.join(pch_dir, "bits", "stdc++.h.gch", "fast.gch")))
+        # Debug PCH should NOT exist (only built what was needed)
+        self.assertFalse(os.path.exists(
+            os.path.join(pch_dir, "bits", "stdc++.h.gch", "debug.gch")))
+
 
 # ---------------------------------------------------------------------------
 # problem_labels
