@@ -16,18 +16,30 @@ import signal
 import sys
 import threading
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "cptool")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 MAKEFILE_TEMPLATE = os.path.join(SCRIPT_DIR, "Makefile.template")
 CC_PORT = 10042  # Competitive Companion port (listed in default hosts)
 
-DEFAULT_CONFIG = {
-    "template": os.path.join(SCRIPT_DIR, "template.cpp"),
-}
+
+def _ensure_config_dir():
+    """Create config dir and copy default template if needed."""
+    if not os.path.isdir(CONFIG_DIR):
+        os.makedirs(CONFIG_DIR)
+    default_template = os.path.join(CONFIG_DIR, "template.cpp")
+    if not os.path.isfile(default_template):
+        src = os.path.join(SCRIPT_DIR, "template.cpp")
+        if os.path.isfile(src):
+            import shutil
+            shutil.copy2(src, default_template)
+            print(f"Initialized config dir: {CONFIG_DIR}")
+            print(f"  Copied default template to {default_template}")
 
 
 def load_config():
-    config = dict(DEFAULT_CONFIG)
+    _ensure_config_dir()
+    config = {"template": os.path.join(CONFIG_DIR, "template.cpp")}
     if os.path.isfile(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
             user = json.load(f)

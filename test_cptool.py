@@ -37,65 +37,80 @@ class TempDirMixin:
         shutil.rmtree(self.tmpdir)
 
 
+class IsolatedConfigMixin:
+    """Mixin that redirects CONFIG_DIR/CONFIG_FILE to a temp directory.
+
+    Must be combined with TempDirMixin (which provides self.tmpdir).
+    Sets up a fake config dir with a copy of the default template.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self._orig_config_dir = cptool.CONFIG_DIR
+        self._orig_config_file = cptool.CONFIG_FILE
+
+        self.config_dir = os.path.join(self.tmpdir, "config")
+        os.makedirs(self.config_dir)
+        # Copy default template into fake config dir
+        shutil.copy2(
+            os.path.join(cptool.SCRIPT_DIR, "template.cpp"),
+            os.path.join(self.config_dir, "template.cpp"),
+        )
+        cptool.CONFIG_DIR = self.config_dir
+        cptool.CONFIG_FILE = os.path.join(self.config_dir, "config.json")
+
+    def tearDown(self):
+        cptool.CONFIG_DIR = self._orig_config_dir
+        cptool.CONFIG_FILE = self._orig_config_file
+        super().tearDown()
+
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-class TestLoadConfig(TempDirMixin, unittest.TestCase):
+class TestLoadConfig(IsolatedConfigMixin, TempDirMixin, unittest.TestCase):
     def test_default_config(self):
         config = cptool.load_config()
         self.assertIn("template", config)
         self.assertTrue(config["template"].endswith("template.cpp"))
+        # Template should point into the config dir
+        self.assertTrue(config["template"].startswith(self.config_dir))
 
     def test_custom_config_overrides(self):
         custom_template = os.path.join(self.tmpdir, "custom.cpp")
         with open(custom_template, "w") as f:
             f.write("// custom")
 
-        config_path = cptool.CONFIG_FILE
-        orig_exists = os.path.isfile(config_path)
-        orig_content = None
-        if orig_exists:
-            with open(config_path, "r") as f:
-                orig_content = f.read()
+        with open(cptool.CONFIG_FILE, "w") as f:
+            json.dump({"template": custom_template}, f)
 
-        try:
-            with open(config_path, "w") as f:
-                json.dump({"template": custom_template}, f)
-            config = cptool.load_config()
-            self.assertEqual(config["template"], custom_template)
-        finally:
-            if orig_exists:
-                with open(config_path, "w") as f:
-                    f.write(orig_content)
-            elif os.path.isfile(config_path):
-                os.remove(config_path)
+        config = cptool.load_config()
+        self.assertEqual(config["template"], custom_template)
 
     def test_tilde_expansion(self):
-        config_path = cptool.CONFIG_FILE
-        orig_exists = os.path.isfile(config_path)
-        orig_content = None
-        if orig_exists:
-            with open(config_path, "r") as f:
-                orig_content = f.read()
+        with open(cptool.CONFIG_FILE, "w") as f:
+            json.dump({"template": "~/some/template.cpp"}, f)
 
-        try:
-            with open(config_path, "w") as f:
-                json.dump({"template": "~/some/template.cpp"}, f)
-            config = cptool.load_config()
-            self.assertNotIn("~", config["template"])
-            self.assertTrue(config["template"].startswith("/"))
-        finally:
-            if orig_exists:
-                with open(config_path, "w") as f:
-                    f.write(orig_content)
-            elif os.path.isfile(config_path):
-                os.remove(config_path)
+        config = cptool.load_config()
+        self.assertNotIn("~", config["template"])
+        self.assertTrue(config["template"].startswith("/"))
+
+    def test_auto_creates_config_dir(self):
+        # Point to a non-existent config dir
+        new_dir = os.path.join(self.tmpdir, "newconfig")
+        cptool.CONFIG_DIR = new_dir
+        cptool.CONFIG_FILE = os.path.join(new_dir, "config.json")
+
+        config = cptool.load_config()
+        self.assertTrue(os.path.isdir(new_dir))
+        self.assertTrue(os.path.isfile(os.path.join(new_dir, "template.cpp")))
+        self.assertTrue(config["template"].endswith("template.cpp"))
 
 
 # ---------------------------------------------------------------------------
 # create_problem
 # ---------------------------------------------------------------------------
-class TestCreateProblem(TempDirMixin, unittest.TestCase):
+class TestCreateProblem(IsolatedConfigMixin, TempDirMixin, unittest.TestCase):
     def get_config(self):
         return cptool.load_config()
 
