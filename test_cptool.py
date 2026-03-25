@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for cptool."""
 
+import argparse
 import http.client
 import json
 import os
@@ -449,6 +450,99 @@ class TestMakefileTemplate(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# parse_makefile_flags
+# ---------------------------------------------------------------------------
+class TestParseMakefileFlags(unittest.TestCase):
+    def test_parses_all_flag_sets(self):
+        flags = cptool.parse_makefile_flags()
+        self.assertIn("WARNFLAGS", flags)
+        self.assertIn("DEBUGFLAGS", flags)
+        self.assertIn("FASTFLAGS", flags)
+
+    def test_warnflags_expanded_in_debug(self):
+        flags = cptool.parse_makefile_flags()
+        # DEBUGFLAGS should contain the actual warning flags, not $(WARNFLAGS)
+        self.assertNotIn("$(WARNFLAGS)", flags["DEBUGFLAGS"])
+        self.assertIn("-Wall", flags["DEBUGFLAGS"])
+
+    def test_warnflags_expanded_in_fast(self):
+        flags = cptool.parse_makefile_flags()
+        self.assertNotIn("$(WARNFLAGS)", flags["FASTFLAGS"])
+        self.assertIn("-Wall", flags["FASTFLAGS"])
+
+    def test_debug_has_debug_macros(self):
+        flags = cptool.parse_makefile_flags()
+        self.assertIn("-D_GLIBCXX_DEBUG", flags["DEBUGFLAGS"])
+
+    def test_fast_lacks_debug_macros(self):
+        flags = cptool.parse_makefile_flags()
+        self.assertNotIn("_GLIBCXX_DEBUG", flags["FASTFLAGS"])
+
+
+# ---------------------------------------------------------------------------
+# PCH command
+# ---------------------------------------------------------------------------
+class TestCmdPch(TempDirMixin, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self._orig_pch_dir = cptool.PCH_DIR
+        cptool.PCH_DIR = os.path.join(self.tmpdir, "pch")
+
+    def tearDown(self):
+        cptool.PCH_DIR = self._orig_pch_dir
+        super().tearDown()
+
+    def test_clean_nonexistent(self):
+        args = argparse.Namespace(clean=True)
+        # Should not raise
+        cptool.cmd_pch(args)
+
+    def test_clean_removes_dir(self):
+        os.makedirs(cptool.PCH_DIR)
+        args = argparse.Namespace(clean=True)
+        cptool.cmd_pch(args)
+        self.assertFalse(os.path.exists(cptool.PCH_DIR))
+
+    def test_build_creates_gch_files(self):
+        args = argparse.Namespace(clean=False)
+        cptool.cmd_pch(args)
+        gch_dir = os.path.join(cptool.PCH_DIR, "bits", "stdc++.h.gch")
+        self.assertTrue(os.path.isfile(os.path.join(gch_dir, "debug.gch")))
+        self.assertTrue(os.path.isfile(os.path.join(gch_dir, "fast.gch")))
+
+    def test_build_creates_wrapper_header(self):
+        args = argparse.Namespace(clean=False)
+        cptool.cmd_pch(args)
+        header = os.path.join(cptool.PCH_DIR, "bits", "stdc++.h")
+        self.assertTrue(os.path.isfile(header))
+        with open(header) as f:
+            content = f.read()
+        self.assertIn("#include_next", content)
+
+    def test_rebuild_overwrites(self):
+        args = argparse.Namespace(clean=False)
+        cptool.cmd_pch(args)
+        gch = os.path.join(cptool.PCH_DIR, "bits", "stdc++.h.gch", "debug.gch")
+        mtime1 = os.path.getmtime(gch)
+        import time
+        time.sleep(0.1)
+        cptool.cmd_pch(args)
+        mtime2 = os.path.getmtime(gch)
+        self.assertGreater(mtime2, mtime1)
+
+
+# ---------------------------------------------------------------------------
+# Makefile template includes PCHDIR
+# ---------------------------------------------------------------------------
+class TestMakefilePCH(TempDirMixin, unittest.TestCase):
+    def test_makefile_has_pchdir(self):
+        with open(cptool.MAKEFILE_TEMPLATE) as f:
+            content = f.read()
+        self.assertIn("PCHDIR", content)
+        self.assertIn("-I$(PCHDIR)", content)
+
+
+# ---------------------------------------------------------------------------
 # problem_labels
 # ---------------------------------------------------------------------------
 class TestProblemLabels(unittest.TestCase):
@@ -495,6 +589,7 @@ class TestArgParsing(TempDirMixin, unittest.TestCase):
         self.assertIn("download", r.stdout)
         self.assertIn("contest", r.stdout)
         self.assertIn("contest-download", r.stdout)
+        self.assertIn("pch", r.stdout)
 
     def test_new_missing_name(self):
         r = self.run_cptool("new")

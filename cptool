@@ -12,7 +12,10 @@ import argparse
 import http.server
 import json
 import os
+import shlex
+import shutil
 import signal
+import subprocess
 import sys
 import threading
 
@@ -20,6 +23,7 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "cptool")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 MAKEFILE_TEMPLATE = os.path.join(SCRIPT_DIR, "Makefile.template")
+PCH_DIR = os.path.join(os.path.expanduser("~"), ".cache", "cptool", "pch")
 CC_PORT = 10042  # Competitive Companion port (listed in default hosts)
 
 
@@ -31,7 +35,6 @@ def _ensure_config_dir():
     if not os.path.isfile(default_template):
         src = os.path.join(SCRIPT_DIR, "template.cpp")
         if os.path.isfile(src):
-            import shutil
             shutil.copy2(src, default_template)
             print(f"Initialized config dir: {CONFIG_DIR}")
             print(f"  Copied default template to {default_template}")
@@ -166,6 +169,63 @@ def listen_for_problems(count=None, port=CC_PORT):
     return problems
 
 
+def parse_makefile_flags():
+    """Parse DEBUGFLAGS and FASTFLAGS from Makefile.template, expanding variable refs."""
+    with open(MAKEFILE_TEMPLATE, "r") as f:
+        content = f.read()
+
+    variables = {}
+    for line in content.splitlines():
+        if "=" in line and not line.startswith("\t"):
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip()
+            if key in ("WARNFLAGS", "DEBUGFLAGS", "FASTFLAGS"):
+                for vname, vval in variables.items():
+                    val = val.replace(f"$({vname})", vval)
+                variables[key] = val
+
+    return variables
+
+
+def cmd_pch(args):
+    if args.clean:
+        if os.path.isdir(PCH_DIR):
+            shutil.rmtree(PCH_DIR)
+            print("Removed precompiled headers.")
+        else:
+            print("No precompiled headers to remove.")
+        return
+
+    flags = parse_makefile_flags()
+    gch_dir = os.path.join(PCH_DIR, "bits", "stdc++.h.gch")
+    os.makedirs(gch_dir, exist_ok=True)
+
+    # Create wrapper header that chains to the real system header
+    header = os.path.join(PCH_DIR, "bits", "stdc++.h")
+    with open(header, "w") as f:
+        f.write(
+            "#pragma GCC system_header\n"
+            "#include_next <bits/stdc++.h>\n"
+        )
+
+    for name, flag_key in [("debug", "DEBUGFLAGS"), ("fast", "FASTFLAGS")]:
+        out = os.path.join(gch_dir, f"{name}.gch")
+        cmd = (
+            ["g++", "-x", "c++-header"]
+            + shlex.split(flags[flag_key])
+            + [f"-I{PCH_DIR}", "-o", out, header]
+        )
+        print(f"Building {name} PCH...")
+        result = subprocess.run(cmd)
+        if result.returncode != 0:
+            print(f"Error: failed to build {name} PCH.", file=sys.stderr)
+            return
+
+    print(f"\nPrecompiled headers built in {PCH_DIR}")
+    print("They will be used automatically by make/make fast.")
+
+
 def cmd_new(args, config):
     name = args.name
     if create_problem(name, config):
@@ -269,7 +329,21 @@ def main():
     )
     p_cd.add_argument("name", help="Contest folder name")
 
+    # cptool pch [--clean]
+    p_pch = sub.add_parser(
+        "pch",
+        help="Build precompiled headers for bits/stdc++.h",
+    )
+    p_pch.add_argument(
+        "--clean", action="store_true", help="Remove precompiled headers",
+    )
+
     args = parser.parse_args()
+
+    if args.command == "pch":
+        cmd_pch(args)
+        return
+
     config = load_config()
 
     if args.command == "new":

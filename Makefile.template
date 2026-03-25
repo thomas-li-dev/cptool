@@ -1,5 +1,6 @@
 PROG = __PROG__
 
+PCHDIR = $(HOME)/.cache/cptool/pch
 WARNFLAGS = -Wall -Wextra -pedantic -Wshadow -Wfloat-equal -Wconversion -Wlogical-op -Wshift-overflow=2
 DEBUGFLAGS = -O2 -std=c++17 $(WARNFLAGS) -fstack-protector-all -D_FORTIFY_SOURCE=2 -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC
 FASTFLAGS = -O2 -std=c++17 $(WARNFLAGS)
@@ -9,10 +10,10 @@ CXXFLAGS = $(DEBUGFLAGS)
 all: $(PROG)
 
 $(PROG): $(PROG).cpp
-	g++ $(CXXFLAGS) -o $(PROG) $(PROG).cpp
+	g++ $(CXXFLAGS) -I$(PCHDIR) -o $(PROG) $(PROG).cpp
 
 fast:
-	g++ $(FASTFLAGS) -o $(PROG) $(PROG).cpp
+	g++ $(FASTFLAGS) -I$(PCHDIR) -o $(PROG) $(PROG).cpp
 
 test: $(PROG)
 	@passed=0; failed=0; total=0; \
@@ -46,7 +47,7 @@ test: $(PROG)
 
 # Generic rule for building other .cpp files in this directory
 %: %.cpp
-	g++ $(CXXFLAGS) -o $@ $<
+	g++ $(CXXFLAGS) -I$(PCHDIR) -o $@ $<
 
 clean:
 	rm -f $(PROG) samples/*.actual
