@@ -18,15 +18,11 @@ import threading
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
+MAKEFILE_TEMPLATE = os.path.join(SCRIPT_DIR, "Makefile.template")
 CC_PORT = 10042  # Competitive Companion port (listed in default hosts)
 
 DEFAULT_CONFIG = {
     "template": os.path.join(SCRIPT_DIR, "template.cpp"),
-    "cxxflags": (
-        "-O2 -std=c++17 -Wall -Wextra -pedantic -Wshadow -Wfloat-equal "
-        "-Wconversion -Wlogical-op -Wshift-overflow=2 -fstack-protector-all "
-        "-D_FORTIFY_SOURCE=2 -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC"
-    ),
 }
 
 
@@ -40,60 +36,20 @@ def load_config():
     return config
 
 
-def make_makefile(prog_name, cxxflags):
-    """Generate Makefile content for a problem."""
-    return f"""PROG = {prog_name}
-CXXFLAGS = {cxxflags}
-
-all: $(PROG)
-
-$(PROG): $(PROG).cpp
-\tg++ $(CXXFLAGS) -o $(PROG) $(PROG).cpp
-
-test: $(PROG)
-\t@passed=0; failed=0; total=0; \\
-\tfor f in samples/*.in; do \\
-\t\t[ -f "$$f" ] || continue; \\
-\t\tbase=$$(basename "$$f" .in); \\
-\t\ttotal=$$((total + 1)); \\
-\t\texpected="samples/$$base.out"; \\
-\t\tactual="samples/$$base.actual"; \\
-\t\t./$(PROG) < "$$f" > "$$actual" 2>&1; \\
-\t\tif [ ! -f "$$expected" ]; then \\
-\t\t\techo "TEST $$base: NO EXPECTED OUTPUT"; \\
-\t\t\techo "  Got:"; sed 's/^/    /' "$$actual"; \\
-\t\telif diff -q "$$expected" "$$actual" > /dev/null 2>&1; then \\
-\t\t\techo "TEST $$base: \\033[32mPASSED\\033[0m"; \\
-\t\t\tpassed=$$((passed + 1)); \\
-\t\telse \\
-\t\t\techo "TEST $$base: \\033[31mFAILED\\033[0m"; \\
-\t\t\techo "  Expected:"; sed 's/^/    /' "$$expected"; \\
-\t\t\techo "  Got:"; sed 's/^/    /' "$$actual"; \\
-\t\t\tfailed=$$((failed + 1)); \\
-\t\tfi; \\
-\tdone; \\
-\techo ""; \\
-\tif [ $$total -eq 0 ]; then \\
-\t\techo "No test cases found in samples/"; \\
-\telse \\
-\t\techo "Results: $$passed/$$total passed"; \\
-\t\tif [ $$failed -gt 0 ]; then exit 1; fi; \\
-\tfi
-
-# Generic rule for building other .cpp files in this directory
-%: %.cpp
-\tg++ $(CXXFLAGS) -o $@ $<
-
-clean:
-\trm -f $(PROG) samples/*.actual
-
-.PHONY: all test clean
-"""
+def problem_labels(count):
+    """Generate problem labels: A-Z, then A1, A2, ..."""
+    labels = []
+    for i in range(count):
+        if i < 26:
+            labels.append(chr(ord("A") + i))
+        else:
+            labels.append(f"A{i - 25}")
+    return labels
 
 
 def create_problem(name, config, base_dir=None, samples=None):
     """Create a problem directory with template, Makefile, and optional samples."""
-    if base_dir:
+    if base_dir is not None:
         prob_dir = os.path.join(base_dir, name)
     else:
         prob_dir = name
@@ -117,9 +73,11 @@ def create_problem(name, config, base_dir=None, samples=None):
         with open(os.path.join(prob_dir, f"{name}.cpp"), "w") as f:
             f.write("")
 
-    # Write Makefile
+    # Write Makefile from template
+    with open(MAKEFILE_TEMPLATE, "r") as f:
+        makefile = f.read().replace("__PROG__", name)
     with open(os.path.join(prob_dir, "Makefile"), "w") as f:
-        f.write(make_makefile(name, config["cxxflags"]))
+        f.write(makefile)
 
     # Write samples
     if samples:
@@ -132,7 +90,7 @@ def create_problem(name, config, base_dir=None, samples=None):
     return True
 
 
-def listen_for_problems(count=None):
+def listen_for_problems(count=None, port=CC_PORT):
     """Listen for Competitive Companion POST requests.
 
     If count is given, stop after that many problems.
@@ -173,7 +131,7 @@ def listen_for_problems(count=None):
     class ReusableHTTPServer(http.server.HTTPServer):
         allow_reuse_address = True
 
-    server = ReusableHTTPServer(("127.0.0.1", CC_PORT), Handler)
+    server = ReusableHTTPServer(("127.0.0.1", port), Handler)
     server_ref[0] = server
 
     # Handle Ctrl+C gracefully
@@ -183,13 +141,14 @@ def listen_for_problems(count=None):
 
     old_handler = signal.signal(signal.SIGINT, sigint_handler)
 
-    print(f"Listening on port {CC_PORT} for Competitive Companion...")
+    print(f"Listening on port {port} for Competitive Companion...")
     print("Open the problem in your browser and click the Competitive Companion button.")
     if count is not None and count > 1:
         print(f"Expecting {count} problems.")
     print("Press Ctrl+C to cancel.\n")
 
     server.serve_forever()
+    server.server_close()
     signal.signal(signal.SIGINT, old_handler)
 
     return problems
@@ -232,13 +191,7 @@ def cmd_contest(args, config):
 
     os.makedirs(name)
 
-    labels = []
-    for i in range(count):
-        if i < 26:
-            labels.append(chr(ord("A") + i))
-        else:
-            labels.append(f"A{i - 25}")
-
+    labels = problem_labels(count)
     for label in labels:
         create_problem(label, config, base_dir=name)
 
@@ -262,12 +215,8 @@ def cmd_contest_download(args, config):
 
     os.makedirs(name)
 
-    for i, data in enumerate(problems):
-        if i < 26:
-            label = chr(ord("A") + i)
-        else:
-            label = f"A{i - 25}"
-
+    labels = problem_labels(len(problems))
+    for label, data in zip(labels, problems):
         samples = data.get("tests", [])
         create_problem(label, config, base_dir=name, samples=samples)
 

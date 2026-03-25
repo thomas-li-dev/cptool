@@ -1,0 +1,54 @@
+PROG = __PROG__
+
+WARNFLAGS = -Wall -Wextra -pedantic -Wshadow -Wfloat-equal -Wconversion -Wlogical-op -Wshift-overflow=2
+DEBUGFLAGS = -O2 -std=c++17 $(WARNFLAGS) -fstack-protector-all -D_FORTIFY_SOURCE=2 -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC
+FASTFLAGS = -O2 -std=c++17 $(WARNFLAGS)
+
+CXXFLAGS = $(DEBUGFLAGS)
+
+all: $(PROG)
+
+$(PROG): $(PROG).cpp
+	g++ $(CXXFLAGS) -o $(PROG) $(PROG).cpp
+
+fast:
+	g++ $(FASTFLAGS) -o $(PROG) $(PROG).cpp
+
+test: $(PROG)
+	@passed=0; failed=0; total=0; \
+	for f in samples/*.in; do \
+		[ -f "$$f" ] || continue; \
+		base=$$(basename "$$f" .in); \
+		total=$$((total + 1)); \
+		expected="samples/$$base.out"; \
+		actual="samples/$$base.actual"; \
+		./$(PROG) < "$$f" > "$$actual" 2>&1; \
+		if [ ! -f "$$expected" ]; then \
+			printf "TEST %s: NO EXPECTED OUTPUT\n" "$$base"; \
+			printf "  Got:\n"; sed 's/^/    /' "$$actual"; \
+		elif diff -q "$$expected" "$$actual" > /dev/null 2>&1; then \
+			printf "TEST %s: \033[32mPASSED\033[0m\n" "$$base"; \
+			passed=$$((passed + 1)); \
+		else \
+			printf "TEST %s: \033[31mFAILED\033[0m\n" "$$base"; \
+			printf "  Expected:\n"; sed 's/^/    /' "$$expected"; \
+			printf "  Got:\n"; sed 's/^/    /' "$$actual"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	printf "\n"; \
+	if [ $$total -eq 0 ]; then \
+		printf "No test cases found in samples/\n"; \
+	else \
+		printf "Results: %s/%s passed\n" "$$passed" "$$total"; \
+		if [ $$failed -gt 0 ]; then exit 1; fi; \
+	fi
+
+# Generic rule for building other .cpp files in this directory
+%: %.cpp
+	g++ $(CXXFLAGS) -o $@ $<
+
+clean:
+	rm -f $(PROG) samples/*.actual
+
+.PHONY: all fast test clean
