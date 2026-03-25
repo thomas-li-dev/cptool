@@ -226,6 +226,88 @@ def cmd_pch(args):
     print("They will be used automatically by make/make fast.")
 
 
+def cmd_completion(args):
+    """Print shell completion script."""
+    shell = args.shell
+    if shell is None:
+        shell_path = os.environ.get("SHELL", "")
+        if "zsh" in shell_path:
+            shell = "zsh"
+        else:
+            shell = "bash"
+
+    subcommands = "new download contest contest-download pch completion"
+
+    if shell == "zsh":
+        print("""\
+#compdef cptool
+
+_cptool() {
+    local -a subcommands
+    subcommands=(
+        'new:Create a problem folder (no samples)'
+        'download:Create a problem folder with samples from Competitive Companion'
+        'contest:Create a contest folder (no samples)'
+        'contest-download:Create a contest folder with samples from Competitive Companion'
+        'pch:Build precompiled headers for bits/stdc++.h'
+        'completion:Print shell completion script'
+    )
+
+    _arguments -C \\
+        '1:command:->cmd' \\
+        '*::arg:->args'
+
+    case $state in
+        cmd)
+            _describe 'command' subcommands
+            ;;
+        args)
+            case $words[1] in
+                pch)
+                    _arguments '--clean[Remove precompiled headers]'
+                    ;;
+                completion)
+                    _arguments '1:shell:(bash zsh)'
+                    ;;
+                new|download|contest|contest-download)
+                    _files -/
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+compdef _cptool cptool
+""")
+    else:
+        print(f"""\
+_cptool() {{
+    local cur prev
+    cur="${{COMP_WORDS[COMP_CWORD]}}"
+    prev="${{COMP_WORDS[COMP_CWORD-1]}}"
+
+    if [ "$COMP_CWORD" -eq 1 ]; then
+        COMPREPLY=($(compgen -W "{subcommands}" -- "$cur"))
+        return
+    fi
+
+    case "${{COMP_WORDS[1]}}" in
+        pch)
+            COMPREPLY=($(compgen -W "--clean" -- "$cur"))
+            ;;
+        completion)
+            COMPREPLY=($(compgen -W "bash zsh" -- "$cur"))
+            ;;
+        new|download|contest|contest-download)
+            COMPREPLY=($(compgen -d -- "$cur"))
+            ;;
+    esac
+}}
+
+complete -F _cptool cptool
+""")
+
+
 def cmd_new(args, config):
     name = args.name
     if create_problem(name, config):
@@ -338,7 +420,21 @@ def main():
         "--clean", action="store_true", help="Remove precompiled headers",
     )
 
+    # cptool completion [bash|zsh]
+    p_comp = sub.add_parser(
+        "completion",
+        help="Print shell completion script",
+    )
+    p_comp.add_argument(
+        "shell", nargs="?", default=None, choices=["bash", "zsh"],
+        help="Shell type (default: auto-detect)",
+    )
+
     args = parser.parse_args()
+
+    if args.command == "completion":
+        cmd_completion(args)
+        return
 
     if args.command == "pch":
         cmd_pch(args)
