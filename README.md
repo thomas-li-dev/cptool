@@ -12,8 +12,6 @@ ln -s ~/cptool/cptool ~/bin/cptool
 # Enable tab completion (add to ~/.zshrc or ~/.bashrc)
 eval "$(cpt completion zsh)"
 
-# Build precompiled headers (optional, ~3x faster compilation)
-cpt pch
 ```
 
 ## Usage
@@ -23,7 +21,7 @@ cpt pch
 cpt problem abc
 
 # Create multiple problems (e.g. for a contest)
-# Downloads from CC; press Ctrl+C when done
+# Downloads from CC; auto-stops after all received
 cpt problem A B C D E
 
 # Without downloading
