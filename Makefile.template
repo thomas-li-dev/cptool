@@ -2,8 +2,8 @@ PROG = __PROG__
 
 CPTOOLDIR = $(HOME)/cptool
 PCHDIR = $(HOME)/.cache/cpt/pch
-WARNFLAGS = -Wall -Wextra -pedantic -Wshadow -Wfloat-equal -Wconversion -Wshift-overflow
-DEBUGFLAGS = -O2 -std=c++17 $(WARNFLAGS) -fsanitize=address -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2
+WARNFLAGS = -Wall -Wextra -pedantic -Wshadow -Wfloat-equal -Wconversion -Wshift-overflow -Wformat=2 -Wdouble-promotion -Wnull-dereference
+DEBUGFLAGS = -O2 -std=c++17 $(WARNFLAGS) -fsanitize=address,undefined
 FASTFLAGS = -O2 -std=c++17 $(WARNFLAGS)
 
 CXXFLAGS = $(DEBUGFLAGS)
