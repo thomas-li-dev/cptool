@@ -208,20 +208,20 @@ class TestCmdProblem(TempDirMixin, unittest.TestCase):
             capture_output=True, text=True,
         )
 
-    def test_problem_no_download_creates_problem(self):
-        r = self.run_cptool("problem", "abc", "--no-download")
+    def test_no_download_creates_problem(self):
+        r = self.run_cptool("abc", "--no-download")
         self.assertEqual(r.returncode, 0)
         self.assertIn("abc", r.stdout)
         self.assertTrue(os.path.isfile("abc/abc.cpp"))
         self.assertTrue(os.path.isfile("abc/Makefile"))
 
-    def test_problem_no_download_duplicate_fails(self):
-        self.run_cptool("problem", "abc", "--no-download")
-        r = self.run_cptool("problem", "abc", "--no-download")
+    def test_no_download_duplicate_fails(self):
+        self.run_cptool("abc", "--no-download")
+        r = self.run_cptool("abc", "--no-download")
         self.assertIn("already exists", r.stderr)
 
-    def test_problem_no_download_multiple(self):
-        r = self.run_cptool("problem", "A", "B", "C", "--no-download")
+    def test_no_download_multiple(self):
+        r = self.run_cptool("A", "B", "C", "--no-download")
         self.assertEqual(r.returncode, 0)
         for name in "ABC":
             self.assertTrue(os.path.isfile(f"{name}/{name}.cpp"))
@@ -319,7 +319,7 @@ class TestCmdProblemDownload(TempDirMixin, unittest.TestCase):
             ],
             "batch": {"id": "t1", "size": 1},
         }
-        proc = self.run_cptool_bg("problem", "aplusb")
+        proc = self.run_cptool_bg("aplusb")
         time.sleep(0.5)
         conn = http.client.HTTPConnection("127.0.0.1", cptool.CC_PORT)
         conn.request("POST", "/", json.dumps(data), {"Content-Type": "application/json"})
@@ -346,7 +346,7 @@ class TestCmdMultiProblemDownload(TempDirMixin, unittest.TestCase):
         )
 
     def test_multi_problem_download(self):
-        proc = self.run_cptool_bg("problem", "A", "B", "C")
+        proc = self.run_cptool_bg("A", "B", "C")
         time.sleep(0.5)
 
         for i in range(3):
@@ -533,19 +533,16 @@ class TestArgParsing(TempDirMixin, unittest.TestCase):
     def test_help_flag(self):
         r = self.run_cptool("--help")
         self.assertEqual(r.returncode, 0)
-        self.assertIn("problem", r.stdout)
+        self.assertIn("names", r.stdout)
 
-    def test_problem_missing_name(self):
-        r = self.run_cptool("problem")
+    def test_no_download_flag_alone(self):
+        r = self.run_cptool("--no-download")
         self.assertNotEqual(r.returncode, 0)
 
-    def test_problem_missing_name_with_flag(self):
-        r = self.run_cptool("problem", "--no-download")
-        self.assertNotEqual(r.returncode, 0)
-
-    def test_invalid_subcommand(self):
-        r = self.run_cptool("bogus")
-        self.assertNotEqual(r.returncode, 0)
+    def test_completion_flag(self):
+        r = self.run_cptool("--completion")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("_cpt", r.stdout)
 
 
 if __name__ == "__main__":

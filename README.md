@@ -9,7 +9,7 @@ CLI tool for competitive programming. Sets up problem/contest directories with C
 ln -s ~/cptool/cpt ~/bin/cpt
 
 # Enable tab completion (add to ~/.zshrc or ~/.bashrc)
-eval "$(cpt completion zsh)"
+eval "$(cpt --completion zsh)"
 
 ```
 
@@ -17,15 +17,15 @@ eval "$(cpt completion zsh)"
 
 ```bash
 # Create a problem (downloads samples from Competitive Companion)
-cpt problem abc
+cpt abc
 
 # Create multiple problems (e.g. for a contest)
 # Downloads from CC; auto-stops after all received
-cpt problem A B C D E
+cpt A B C D E
 
 # Without downloading
-cpt problem abc --no-download
-cpt problem A B C D E --no-download
+cpt abc --no-download
+cpt A B C D E --no-download
 ```
 
 Inside a problem directory:
