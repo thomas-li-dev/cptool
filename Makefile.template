@@ -1,38 +1,37 @@
 PROG = __PROG__
 
+CPTOOLDIR = $(HOME)/cptool
 PCHDIR = $(HOME)/.cache/cpt/pch
-WARNFLAGS = -Wall -Wextra -pedantic -Wshadow -Wfloat-equal -Wconversion -Wlogical-op -Wshift-overflow=2
-DEBUGFLAGS = -O2 -std=c++17 $(WARNFLAGS) -fstack-protector-all -D_FORTIFY_SOURCE=2 -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC
+WARNFLAGS = -Wall -Wextra -pedantic -Wshadow -Wfloat-equal -Wconversion -Wshift-overflow
+DEBUGFLAGS = -O2 -std=c++17 $(WARNFLAGS) -fsanitize=address -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2
 FASTFLAGS = -O2 -std=c++17 $(WARNFLAGS)
 
 CXXFLAGS = $(DEBUGFLAGS)
 
 PCHHEADER = $(PCHDIR)/bits/stdc++.h
-PCHDEBUG = $(PCHDIR)/bits/stdc++.h.gch/debug.gch
-PCHFAST = $(PCHDIR)/bits/stdc++.h.gch/fast.gch
+PCHDEBUG = $(PCHDIR)/debug.pch
+PCHFAST = $(PCHDIR)/fast.pch
 
 all: $(PROG)
 
 $(PROG): $(PROG).cpp | $(PCHDEBUG)
-	g++ $(CXXFLAGS) -I$(PCHDIR) -o $(PROG) $(PROG).cpp
+	clang++ $(CXXFLAGS) -include-pch $(PCHDEBUG) -I$(PCHDIR) -o $(PROG) $(PROG).cpp
 
 fast: | $(PCHFAST)
-	g++ $(FASTFLAGS) -I$(PCHDIR) -o $(PROG) $(PROG).cpp
+	clang++ $(FASTFLAGS) -include-pch $(PCHFAST) -I$(PCHDIR) -o $(PROG) $(PROG).cpp
 
-# Auto-build precompiled headers if missing
-$(PCHHEADER):
+# Auto-install stdc++.h shim (supports both GCC and Clang)
+$(PCHHEADER): $(CPTOOLDIR)/stdc++.h
 	@mkdir -p $(dir $@)
-	@printf '#pragma GCC system_header\n#include_next <bits/stdc++.h>\n' > $@
+	@cp $(CPTOOLDIR)/stdc++.h $@
 
 $(PCHDEBUG): $(PCHHEADER)
-	@mkdir -p $(dir $@)
 	@echo "Building debug precompiled header..."
-	@g++ -x c++-header $(DEBUGFLAGS) -I$(PCHDIR) -o $@ $<
+	@clang++ -x c++-header $(DEBUGFLAGS) -o $@ $<
 
 $(PCHFAST): $(PCHHEADER)
-	@mkdir -p $(dir $@)
 	@echo "Building fast precompiled header..."
-	@g++ -x c++-header $(FASTFLAGS) -I$(PCHDIR) -o $@ $<
+	@clang++ -x c++-header $(FASTFLAGS) -o $@ $<
 
 test: $(PROG)
 	@passed=0; failed=0; total=0; \
@@ -66,7 +65,7 @@ test: $(PROG)
 
 # Generic rule for building other .cpp files in this directory
 %: %.cpp | $(PCHDEBUG)
-	g++ $(CXXFLAGS) -I$(PCHDIR) -o $@ $<
+	clang++ $(CXXFLAGS) -include-pch $(PCHDEBUG) -I$(PCHDIR) -o $@ $<
 
 clean:
 	rm -f $(PROG) samples/*.actual
