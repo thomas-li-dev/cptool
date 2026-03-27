@@ -12,7 +12,7 @@ PCHHEADER = $(PCHDIR)/bits/stdc++.h
 PCHDEBUG = $(PCHDIR)/debug.pch
 PCHFAST = $(PCHDIR)/fast.pch
 
-all: $(PROG)
+all: $(PROG) compile_commands.json
 
 $(PROG): $(PROG).cpp | $(PCHDEBUG)
 	clang++ $(CXXFLAGS) -include-pch $(PCHDEBUG) -I$(PCHDIR) -o $(PROG) $(PROG).cpp
@@ -66,6 +66,9 @@ test: $(PROG)
 # Generic rule for building other .cpp files in this directory
 %: %.cpp | $(PCHDEBUG)
 	clang++ $(CXXFLAGS) -include-pch $(PCHDEBUG) -I$(PCHDIR) -o $@ $<
+
+compile_commands.json: Makefile
+	@printf '[{"directory":"%s","file":"$(PROG).cpp","command":"clang++ $(CXXFLAGS) -I$(PCHDIR) -o $(PROG) $(PROG).cpp"}]\n' "$$PWD" > $@
 
 clean:
 	rm -f $(PROG) samples/*.actual
