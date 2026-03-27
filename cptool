@@ -105,11 +105,12 @@ def create_problem(name, config, base_dir=None, samples=None):
     return True
 
 
-def listen_for_problems(count=None, port=CC_PORT):
+def listen_for_problems(count=None, multi=False, port=CC_PORT):
     """Listen for Competitive Companion POST requests.
 
-    If count is given, stop after that many problems.
-    If count is None (auto mode), learn the batch size from the first request.
+    If count is given, stop after exactly that many problems.
+    If multi is True, listen until Ctrl+C (or auto-stop on batch detection).
+    Otherwise (single problem mode), stop after 1.
     Returns list of problem data dicts.
     """
     problems = []
@@ -130,11 +131,11 @@ def listen_for_problems(count=None, port=CC_PORT):
             tests = len(data.get("tests", []))
             print(f"  Received: {name} ({tests} samples)")
 
-            # Auto-detect batch size from first problem
-            if expected[0] is None:
-                batch_size = data.get("batch", {}).get("size", 1)
-                expected[0] = batch_size
+            # Auto-detect batch size from contest batch info
+            if expected[0] is None and multi:
+                batch_size = data.get("batch", {}).get("size", 0)
                 if batch_size > 1:
+                    expected[0] = batch_size
                     print(f"  Contest detected: expecting {batch_size} problems total.")
 
             if expected[0] is not None and len(problems) >= expected[0]:
@@ -146,21 +147,24 @@ def listen_for_problems(count=None, port=CC_PORT):
     class ReusableHTTPServer(http.server.HTTPServer):
         allow_reuse_address = True
 
+    if count is None and not multi:
+        expected[0] = 1  # single problem mode
+
     server = ReusableHTTPServer(("127.0.0.1", port), Handler)
     server_ref[0] = server
 
     # Handle Ctrl+C gracefully
     def sigint_handler(sig, frame):
-        print("\nCancelled.")
         threading.Thread(target=server.shutdown, daemon=True).start()
 
     old_handler = signal.signal(signal.SIGINT, sigint_handler)
 
     print(f"Listening on port {port} for Competitive Companion...")
     print("Open the problem in your browser and click the Competitive Companion button.")
-    if count is not None and count > 1:
-        print(f"Expecting {count} problems.")
-    print("Press Ctrl+C to cancel.\n")
+    if multi:
+        print("Press Ctrl+C when done.\n")
+    else:
+        print("Press Ctrl+C to cancel.\n")
 
     server.serve_forever()
     server.server_close()
@@ -317,7 +321,7 @@ def cmd_problem(args, config):
     samples = None
 
     if not args.no_download:
-        problems = listen_for_problems(count=1)
+        problems = listen_for_problems()
         if not problems:
             print("No data received.", file=sys.stderr)
             return
@@ -353,8 +357,7 @@ def cmd_contest(args, config):
         for label in labels:
             print(f"  {name}/{label}/{label}.cpp")
     else:
-        print("Waiting for contest data from Competitive Companion...")
-        problems = listen_for_problems(count=None)
+        problems = listen_for_problems(multi=True)
         if not problems:
             print("No data received.", file=sys.stderr)
             return
