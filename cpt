@@ -17,73 +17,55 @@ import threading
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "cpt")
-CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 MAKEFILE_TEMPLATE = os.path.join(SCRIPT_DIR, "Makefile.template")
-CC_PORT = 10042  # Competitive Companion port (listed in default hosts)
+CC_PORT = 10042
 
 
-def _ensure_config_dir():
-    """Create config dir and copy default template if needed."""
-    if not os.path.isdir(CONFIG_DIR):
-        os.makedirs(CONFIG_DIR)
+def load_config():
+    """Load config, initializing config dir with default template if needed."""
+    os.makedirs(CONFIG_DIR, exist_ok=True)
     default_template = os.path.join(CONFIG_DIR, "template.cpp")
     if not os.path.isfile(default_template):
         src = os.path.join(SCRIPT_DIR, "template.cpp")
         if os.path.isfile(src):
             shutil.copy2(src, default_template)
-            print(f"Initialized config dir: {CONFIG_DIR}")
-            print(f"  Copied default template to {default_template}")
+            print(f"Initialized {CONFIG_DIR}")
 
-
-def load_config():
-    _ensure_config_dir()
-    config = {"template": os.path.join(CONFIG_DIR, "template.cpp")}
-    if os.path.isfile(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            user = json.load(f)
-        config.update(user)
+    config = {"template": default_template}
+    config_file = os.path.join(CONFIG_DIR, "config.json")
+    if os.path.isfile(config_file):
+        with open(config_file) as f:
+            config.update(json.load(f))
     config["template"] = os.path.expanduser(config["template"])
     return config
 
 
-def create_problem(name, config, base_dir=None, samples=None):
+def create_problem(name, config, samples=None):
     """Create a problem directory with template, Makefile, and optional samples."""
-    if base_dir is not None:
-        prob_dir = os.path.join(base_dir, name)
-    else:
-        prob_dir = name
-
-    if os.path.exists(prob_dir):
-        print(f"Error: directory '{prob_dir}' already exists", file=sys.stderr)
+    if os.path.exists(name):
+        print(f"Error: '{name}' already exists", file=sys.stderr)
         return False
 
-    os.makedirs(prob_dir)
-    os.makedirs(os.path.join(prob_dir, "samples"), exist_ok=True)
+    os.makedirs(os.path.join(name, "samples"))
 
-    # Copy template
-    template_path = config["template"]
-    if os.path.isfile(template_path):
-        with open(template_path, "r") as f:
-            template = f.read()
-        with open(os.path.join(prob_dir, f"{name}.cpp"), "w") as f:
-            f.write(template)
+    cpp_path = os.path.join(name, f"{name}.cpp")
+    template = config["template"]
+    if os.path.isfile(template):
+        shutil.copy2(template, cpp_path)
     else:
-        print(f"Warning: template not found at {template_path}", file=sys.stderr)
-        with open(os.path.join(prob_dir, f"{name}.cpp"), "w") as f:
-            f.write("")
+        print(f"Warning: template not found at {template}", file=sys.stderr)
+        open(cpp_path, "w").close()
 
-    # Write Makefile from template
-    with open(MAKEFILE_TEMPLATE, "r") as f:
+    with open(MAKEFILE_TEMPLATE) as f:
         makefile = f.read().replace("__PROG__", name)
-    with open(os.path.join(prob_dir, "Makefile"), "w") as f:
+    with open(os.path.join(name, "Makefile"), "w") as f:
         f.write(makefile)
 
-    # Write samples
     if samples:
         for i, test in enumerate(samples, 1):
-            with open(os.path.join(prob_dir, "samples", f"{i}.in"), "w") as f:
+            with open(os.path.join(name, "samples", f"{i}.in"), "w") as f:
                 f.write(test["input"])
-            with open(os.path.join(prob_dir, "samples", f"{i}.out"), "w") as f:
+            with open(os.path.join(name, "samples", f"{i}.out"), "w") as f:
                 f.write(test["output"])
 
     return True
@@ -92,46 +74,34 @@ def create_problem(name, config, base_dir=None, samples=None):
 def listen_for_problems(count=1, port=CC_PORT):
     """Listen for Competitive Companion POST requests.
 
-    Stops after receiving count problems. Press Ctrl+C to cancel early.
-    Returns list of problem data dicts.
+    Stops after receiving count problems. Ctrl+C to cancel early.
     """
     problems = []
     server_ref = [None]
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length)
+            body = self.rfile.read(int(self.headers["Content-Length"]))
             data = json.loads(body)
             problems.append(data)
-
             self.send_response(200)
             self.end_headers()
-
-            name = data.get("name", "?")
-            tests = len(data.get("tests", []))
-            print(f"  Received: {name} ({tests} samples)")
-
+            print(f"  Received: {data.get('name', '?')} ({len(data.get('tests', []))} samples)")
             if len(problems) >= count:
                 threading.Thread(target=server_ref[0].shutdown, daemon=True).start()
 
-        def log_message(self, format, *args):
-            pass  # Suppress default logging
+        def log_message(self, *_):
+            pass
 
     class ReusableHTTPServer(http.server.HTTPServer):
         allow_reuse_address = True
 
     server = ReusableHTTPServer(("127.0.0.1", port), Handler)
     server_ref[0] = server
-
-    # Handle Ctrl+C gracefully
-    def sigint_handler(sig, frame):
-        threading.Thread(target=server.shutdown, daemon=True).start()
-
-    old_handler = signal.signal(signal.SIGINT, sigint_handler)
+    old_handler = signal.signal(signal.SIGINT,
+        lambda *_: threading.Thread(target=server.shutdown, daemon=True).start())
 
     print(f"Listening on port {port} for Competitive Companion...")
-    print("Open the problem in your browser and click the Competitive Companion button.")
     if count > 1:
         print(f"Expecting {count} problems.")
     print("Press Ctrl+C to cancel.\n")
@@ -139,19 +109,14 @@ def listen_for_problems(count=1, port=CC_PORT):
     server.serve_forever()
     server.server_close()
     signal.signal(signal.SIGINT, old_handler)
-
     return problems
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Competitive Programming CLI tool",
-    )
+    parser = argparse.ArgumentParser(description="Competitive Programming CLI tool")
     parser.add_argument("names", nargs="*", help="Problem/folder name(s)")
-    parser.add_argument(
-        "--no-download", action="store_true",
-        help="Skip downloading samples from Competitive Companion",
-    )
+    parser.add_argument("--no-download", action="store_true",
+                        help="Skip downloading samples from Competitive Companion")
     args = parser.parse_args()
 
     if not args.names:
@@ -159,32 +124,24 @@ def main():
         sys.exit(1)
 
     config = load_config()
-    names = args.names
 
     if args.no_download:
-        for name in names:
+        for name in args.names:
             if create_problem(name, config):
-                print(f"Created problem '{name}/'")
+                print(f"Created '{name}/'")
     else:
-        problems = listen_for_problems(count=len(names))
+        problems = listen_for_problems(count=len(args.names))
         if not problems:
             print("No data received.", file=sys.stderr)
             return
-
-        if len(problems) < len(names):
-            print(f"Warning: received {len(problems)} problems but expected {len(names)}.",
+        if len(problems) < len(args.names):
+            print(f"Warning: received {len(problems)} but expected {len(args.names)}.",
                   file=sys.stderr)
-
-        for name, data in zip(names, problems):
+        for name, data in zip(args.names, problems):
             samples = data.get("tests", [])
             if create_problem(name, config, samples=samples):
-                prob_name = data.get("name", "?")
-                n = len(samples)
-                print(f"  {name}: {prob_name} ({n} samples)")
-
-        print(f"\nCreated {len(names)} problem(s).")
-        first = names[0]
-        print(f"Run 'cd {first} && make && make test' to build and test.")
+                print(f"  {name}: {data.get('name', '?')} ({len(samples)} samples)")
+        print(f"\nRun 'cd {args.names[0]} && make && make test' to build and test.")
 
 
 if __name__ == "__main__":

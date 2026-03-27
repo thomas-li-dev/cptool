@@ -1,6 +1,6 @@
 PROG = __PROG__
 
-PCHDIR = $(HOME)/.cache/cptool/pch
+PCHDIR = $(HOME)/.cache/cpt/pch
 WARNFLAGS = -Wall -Wextra -pedantic -Wshadow -Wfloat-equal -Wconversion -Wlogical-op -Wshift-overflow=2
 DEBUGFLAGS = -O2 -std=c++17 $(WARNFLAGS) -fstack-protector-all -D_FORTIFY_SOURCE=2 -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC
 FASTFLAGS = -O2 -std=c++17 $(WARNFLAGS)
