@@ -279,29 +279,10 @@ class TestListenForProblems(unittest.TestCase):
             }
             self._post_data(data, port=port, delay=0.3 + i * 0.2)
 
-        problems = cptool.listen_for_problems(multi=True, port=port)
+        problems = cptool.listen_for_problems(count=3, port=port)
         self.assertEqual(len(problems), 3)
         self.assertEqual(problems[0]["name"], "Problem 0")
         self.assertEqual(problems[2]["name"], "Problem 2")
-
-    def test_multi_stops_on_sigint(self):
-        """In multi mode without batch info, listener runs until interrupted."""
-        port = _alloc_port()
-        # Send 2 problems without batch size, then signal stop
-        for i in range(2):
-            data = {
-                "name": f"Problem {i}",
-                "tests": [{"input": f"{i}\n", "output": f"{i}\n"}],
-            }
-            self._post_data(data, port=port, delay=0.3 + i * 0.2)
-
-        def stop_server():
-            time.sleep(1.0)
-            os.kill(os.getpid(), signal.SIGINT)
-        threading.Thread(target=stop_server, daemon=True).start()
-
-        problems = cptool.listen_for_problems(multi=True, port=port)
-        self.assertEqual(len(problems), 2)
 
     def test_multiple_samples(self):
         port = _alloc_port()
@@ -380,9 +361,6 @@ class TestCmdMultiProblemDownload(TempDirMixin, unittest.TestCase):
             conn.close()
             time.sleep(0.2)
 
-        # Send SIGINT to stop the listener (multi mode with no batch info)
-        time.sleep(0.3)
-        proc.send_signal(signal.SIGINT)
         proc.wait(timeout=5)
 
         for label in "ABC":

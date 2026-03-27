@@ -92,16 +92,13 @@ def create_problem(name, config, base_dir=None, samples=None):
     return True
 
 
-def listen_for_problems(count=None, multi=False, port=CC_PORT):
+def listen_for_problems(count=1, port=CC_PORT):
     """Listen for Competitive Companion POST requests.
 
-    If count is given, stop after exactly that many problems.
-    If multi is True, listen until Ctrl+C (or auto-stop on batch detection).
-    Otherwise (single problem mode), stop after 1.
+    Stops after receiving count problems. Press Ctrl+C to cancel early.
     Returns list of problem data dicts.
     """
     problems = []
-    expected = [count]  # mutable so handler can update it
     server_ref = [None]
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -118,14 +115,7 @@ def listen_for_problems(count=None, multi=False, port=CC_PORT):
             tests = len(data.get("tests", []))
             print(f"  Received: {name} ({tests} samples)")
 
-            # Auto-detect batch size from contest batch info
-            if expected[0] is None and multi:
-                batch_size = data.get("batch", {}).get("size", 0)
-                if batch_size > 1:
-                    expected[0] = batch_size
-                    print(f"  Contest detected: expecting {batch_size} problems total.")
-
-            if expected[0] is not None and len(problems) >= expected[0]:
+            if len(problems) >= count:
                 threading.Thread(target=server_ref[0].shutdown, daemon=True).start()
 
         def log_message(self, format, *args):
@@ -133,9 +123,6 @@ def listen_for_problems(count=None, multi=False, port=CC_PORT):
 
     class ReusableHTTPServer(http.server.HTTPServer):
         allow_reuse_address = True
-
-    if count is None and not multi:
-        expected[0] = 1  # single problem mode
 
     server = ReusableHTTPServer(("127.0.0.1", port), Handler)
     server_ref[0] = server
@@ -148,10 +135,9 @@ def listen_for_problems(count=None, multi=False, port=CC_PORT):
 
     print(f"Listening on port {port} for Competitive Companion...")
     print("Open the problem in your browser and click the Competitive Companion button.")
-    if multi:
-        print("Press Ctrl+C when done.\n")
-    else:
-        print("Press Ctrl+C to cancel.\n")
+    if count > 1:
+        print(f"Expecting {count} problems.")
+    print("Press Ctrl+C to cancel.\n")
 
     server.serve_forever()
     server.server_close()
@@ -305,7 +291,7 @@ def cmd_problem(args, config):
             if create_problem(name, config):
                 print(f"Created problem '{name}/'")
     else:
-        problems = listen_for_problems(multi=multi)
+        problems = listen_for_problems(count=len(names))
         if not problems:
             print("No data received.", file=sys.stderr)
             return
