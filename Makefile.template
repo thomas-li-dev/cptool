@@ -3,7 +3,7 @@ PROG = __PROG__
 CPTOOLDIR = $(HOME)/cptool
 PCHDIR = $(HOME)/.cache/cpt/pch
 WARNFLAGS = -Wall -Wextra -pedantic -Wshadow -Wfloat-equal -Wconversion -Wshift-overflow -Wformat=2 -Wdouble-promotion -Wnull-dereference
-DEBUGFLAGS = -O2 -std=c++17 $(WARNFLAGS) -fsanitize=address,undefined
+DEBUGFLAGS = -O2 -g -std=c++17 $(WARNFLAGS) -fsanitize=address,undefined
 FASTFLAGS = -O2 -std=c++17 $(WARNFLAGS)
 
 CXXFLAGS = $(DEBUGFLAGS)
@@ -41,7 +41,7 @@ test: $(PROG)
 		total=$$((total + 1)); \
 		expected="samples/$$base.out"; \
 		actual="samples/$$base.actual"; \
-		./$(PROG) < "$$f" > "$$actual" 2>&1; \
+		./$(PROG) < "$$f" > "$$actual"; \
 		if [ ! -f "$$expected" ]; then \
 			printf "TEST %s: NO EXPECTED OUTPUT\n" "$$base"; \
 			printf "  Got:\n"; sed 's/^/    /' "$$actual"; \

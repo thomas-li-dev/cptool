@@ -137,7 +137,7 @@ class TestCreateProblem(IsolatedConfigMixin, TempDirMixin, unittest.TestCase):
         self.assertIn("DEBUGFLAGS", content)
         self.assertIn("FASTFLAGS", content)
         self.assertIn("fast:", content)
-        self.assertIn("_GLIBCXX_DEBUG", content)
+        self.assertIn("fsanitize=address,undefined", content)
 
     def test_samples_written(self):
         samples = [
@@ -318,15 +318,15 @@ class TestMakefile(unittest.TestCase):
 
     def test_debug_flags(self):
         content = self._read()
-        self.assertIn("_GLIBCXX_DEBUG", content)
+        self.assertIn("fsanitize=address,undefined", content)
         fast_line = [l for l in content.splitlines() if l.startswith("FASTFLAGS")][0]
-        self.assertNotIn("_GLIBCXX_DEBUG", fast_line)
+        self.assertNotIn("fsanitize", fast_line)
 
     def test_pch_support(self):
         content = self._read()
         self.assertIn("-I$(PCHDIR)", content)
-        self.assertIn("g++ -x c++-header $(DEBUGFLAGS)", content)
-        self.assertIn("g++ -x c++-header $(FASTFLAGS)", content)
+        self.assertIn("clang++ -x c++-header $(DEBUGFLAGS)", content)
+        self.assertIn("clang++ -x c++-header $(FASTFLAGS)", content)
 
 
 class TestMakefilePCH(TempDirMixin, unittest.TestCase):
@@ -352,7 +352,7 @@ class TestMakefilePCH(TempDirMixin, unittest.TestCase):
                                 capture_output=True, text=True, timeout=120)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(
-            os.path.join(pch_dir, "bits", "stdc++.h.gch", "debug.gch")))
+            os.path.join(pch_dir, "debug.pch")))
         run = subprocess.run([os.path.join(prob_dir, "prob")],
                              capture_output=True, text=True)
         self.assertEqual(run.stdout.strip(), "42")
@@ -363,9 +363,9 @@ class TestMakefilePCH(TempDirMixin, unittest.TestCase):
                                 capture_output=True, text=True, timeout=120)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.isfile(
-            os.path.join(pch_dir, "bits", "stdc++.h.gch", "fast.gch")))
+            os.path.join(pch_dir, "fast.pch")))
         self.assertFalse(os.path.isfile(
-            os.path.join(pch_dir, "bits", "stdc++.h.gch", "debug.gch")))
+            os.path.join(pch_dir, "debug.pch")))
 
 
 if __name__ == "__main__":
