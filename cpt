@@ -10,6 +10,7 @@ import argparse
 import http.server
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -43,6 +44,11 @@ def load_config():
 
 def create_problem(name, config, samples=None):
     """Create a problem directory with template, Makefile, and optional samples."""
+    if not re.match(r'^[A-Za-z0-9][A-Za-z0-9_-]*$', name):
+        print(f"Error: '{name}' contains invalid characters. "
+              f"Use only letters, digits, hyphens, and underscores.",
+              file=sys.stderr)
+        return False
     if os.path.exists(name):
         print(f"Error: '{name}' already exists", file=sys.stderr)
         return False
@@ -55,15 +61,19 @@ def create_problem(name, config, samples=None):
         shutil.copy2(template, cpp_path)
     else:
         print(f"Warning: template not found at {template}", file=sys.stderr)
-        open(cpp_path, "w").close()
+        with open(cpp_path, "w"):
+            pass
 
     with open(MAKEFILE_TEMPLATE) as f:
         makefile = f.read().replace("__PROG__", name)
     with open(os.path.join(name, "Makefile"), "w") as f:
         f.write(makefile)
 
-    subprocess.run(["make", "-C", name, "compile_commands.json"],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    result = subprocess.run(["make", "-C", name, "compile_commands.json"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if result.returncode != 0:
+        print(f"Warning: failed to generate compile_commands.json for '{name}'",
+              file=sys.stderr)
 
     if samples:
         for i, test in enumerate(samples, 1):
@@ -141,11 +151,14 @@ def main():
         if len(problems) < len(args.names):
             print(f"Warning: received {len(problems)} but expected {len(args.names)}.",
                   file=sys.stderr)
+        created = []
         for name, data in zip(args.names, problems):
             samples = data.get("tests", [])
             if create_problem(name, config, samples=samples):
                 print(f"  {name}: {data.get('name', '?')} ({len(samples)} samples)")
-        print(f"\nRun 'cd {args.names[0]} && make && make test' to build and test.")
+                created.append(name)
+        if created:
+            print(f"\nRun 'cd {created[0]} && make && make test' to build and test.")
 
 
 if __name__ == "__main__":

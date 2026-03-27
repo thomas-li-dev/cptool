@@ -3,7 +3,7 @@ PROG = __PROG__
 CPTOOLDIR = $(HOME)/cptool
 PCHDIR = $(HOME)/.cache/cpt/pch
 WARNFLAGS = -Wall -Wextra -pedantic -Wshadow -Wfloat-equal -Wconversion -Wshift-overflow -Wformat=2 -Wdouble-promotion -Wnull-dereference
-DEBUGFLAGS = -O2 -g -std=c++17 $(WARNFLAGS) -fsanitize=address,undefined
+DEBUGFLAGS = -O2 -g -std=c++17 $(WARNFLAGS) -fsanitize=address,undefined -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG
 FASTFLAGS = -O2 -std=c++17 $(WARNFLAGS)
 
 CXXFLAGS = $(DEBUGFLAGS)

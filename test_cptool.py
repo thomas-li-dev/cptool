@@ -158,6 +158,16 @@ class TestCreateProblem(IsolatedConfigMixin, TempDirMixin, unittest.TestCase):
         os.makedirs("sol")
         self.assertFalse(cpt.create_problem("sol", self.config()))
 
+    def test_invalid_name_rejected(self):
+        self.assertFalse(cpt.create_problem("../evil", self.config()))
+        self.assertFalse(cpt.create_problem("a;b", self.config()))
+        self.assertFalse(cpt.create_problem("a b", self.config()))
+        self.assertFalse(os.path.exists("../evil"))
+
+    def test_hyphen_leading_name_rejected(self):
+        self.assertFalse(cpt.create_problem("-rf", self.config()))
+        self.assertFalse(os.path.exists("-rf"))
+
     def test_missing_template_creates_empty_cpp(self):
         cpt.create_problem("sol", {"template": "/nonexistent"})
         with open("sol/sol.cpp") as f:
