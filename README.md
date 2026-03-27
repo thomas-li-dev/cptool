@@ -7,7 +7,6 @@ CLI tool for competitive programming. Sets up problem/contest directories with C
 ```bash
 # Symlink into your PATH
 ln -s ~/cptool/cpt ~/bin/cpt
-ln -s ~/cptool/cptool ~/bin/cptool
 
 # Enable tab completion (add to ~/.zshrc or ~/.bashrc)
 eval "$(cpt completion zsh)"
@@ -49,8 +48,7 @@ Config lives in `~/.config/cptool/`:
 ## Project structure
 
 ```
-cptool              # main CLI script
-cpt                 # symlink to cptool
+cpt                 # main CLI script
 Makefile.template   # template for per-problem Makefiles
 template.cpp        # default C++ template
 test_cptool.py      # test suite

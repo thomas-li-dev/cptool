@@ -19,7 +19,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 import importlib.util
 import importlib.machinery
 
-loader = importlib.machinery.SourceFileLoader("cptool", os.path.join(SCRIPT_DIR, "cptool"))
+loader = importlib.machinery.SourceFileLoader("cptool", os.path.join(SCRIPT_DIR, "cpt"))
 spec = importlib.util.spec_from_loader("cptool", loader)
 cptool = importlib.util.module_from_spec(spec)
 loader.exec_module(cptool)
@@ -204,7 +204,7 @@ class TestCreateProblem(IsolatedConfigMixin, TempDirMixin, unittest.TestCase):
 class TestCmdProblem(TempDirMixin, unittest.TestCase):
     def run_cptool(self, *args):
         return subprocess.run(
-            [sys.executable, os.path.join(SCRIPT_DIR, "cptool")] + list(args),
+            [sys.executable, os.path.join(SCRIPT_DIR, "cpt")] + list(args),
             capture_output=True, text=True,
         )
 
@@ -306,7 +306,7 @@ class TestCmdProblemDownload(TempDirMixin, unittest.TestCase):
     def run_cptool_bg(self, *args):
         """Run cptool in a subprocess (non-blocking)."""
         return subprocess.Popen(
-            [sys.executable, os.path.join(SCRIPT_DIR, "cptool")] + list(args),
+            [sys.executable, os.path.join(SCRIPT_DIR, "cpt")] + list(args),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
 
@@ -341,7 +341,7 @@ class TestCmdProblemDownload(TempDirMixin, unittest.TestCase):
 class TestCmdMultiProblemDownload(TempDirMixin, unittest.TestCase):
     def run_cptool_bg(self, *args):
         return subprocess.Popen(
-            [sys.executable, os.path.join(SCRIPT_DIR, "cptool")] + list(args),
+            [sys.executable, os.path.join(SCRIPT_DIR, "cpt")] + list(args),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
 
@@ -522,7 +522,7 @@ class TestMakefilePCH(TempDirMixin, unittest.TestCase):
 class TestArgParsing(TempDirMixin, unittest.TestCase):
     def run_cptool(self, *args):
         return subprocess.run(
-            [sys.executable, os.path.join(SCRIPT_DIR, "cptool")] + list(args),
+            [sys.executable, os.path.join(SCRIPT_DIR, "cpt")] + list(args),
             capture_output=True, text=True,
         )
 
