@@ -8,9 +8,6 @@ CLI tool for competitive programming. Sets up problem/contest directories with C
 # Symlink into your PATH
 ln -s ~/cptool/cpt ~/bin/cpt
 
-# Enable tab completion (add to ~/.zshrc or ~/.bashrc)
-eval "$(cpt --completion zsh)"
-
 ```
 
 ## Usage

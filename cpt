@@ -4,7 +4,6 @@
 Usage:
   cpt <name...>                Create problem folder(s), download samples from CC
   cpt <name...> --no-download  Create problem folder(s) without samples
-  cpt --completion [bash|zsh]  Print shell completion script
 """
 
 import argparse
@@ -144,39 +143,6 @@ def listen_for_problems(count=1, port=CC_PORT):
     return problems
 
 
-def print_completion(shell):
-    """Print shell completion script."""
-    if shell is None:
-        shell_path = os.environ.get("SHELL", "")
-        shell = "zsh" if "zsh" in shell_path else "bash"
-
-    if shell == "zsh":
-        print("""\
-#compdef cpt
-
-_cpt() {
-    _arguments \\
-        '*:name:' \\
-        '--no-download[Skip downloading samples]' \\
-        '--completion[Print shell completion script]:shell:(bash zsh)'
-}
-
-compdef _cpt cpt
-""")
-    else:
-        print("""\
-_cpt() {
-    local cur
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--no-download --completion" -- "$cur"))
-    fi
-}
-
-complete -F _cpt cpt
-""")
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Competitive Programming CLI tool",
@@ -186,17 +152,7 @@ def main():
         "--no-download", action="store_true",
         help="Skip downloading samples from Competitive Companion",
     )
-    parser.add_argument(
-        "--completion", nargs="?", const="auto", default=None,
-        metavar="SHELL", choices=["auto", "bash", "zsh"],
-        help="Print shell completion script (bash or zsh)",
-    )
-
     args = parser.parse_args()
-
-    if args.completion is not None:
-        print_completion(None if args.completion == "auto" else args.completion)
-        return
 
     if not args.names:
         parser.print_help()

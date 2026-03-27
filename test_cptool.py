@@ -539,11 +539,6 @@ class TestArgParsing(TempDirMixin, unittest.TestCase):
         r = self.run_cptool("--no-download")
         self.assertNotEqual(r.returncode, 0)
 
-    def test_completion_flag(self):
-        r = self.run_cptool("--completion")
-        self.assertEqual(r.returncode, 0)
-        self.assertIn("_cpt", r.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()
