@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import signal
+import subprocess
 import sys
 import threading
 
@@ -60,6 +61,9 @@ def create_problem(name, config, samples=None):
         makefile = f.read().replace("__PROG__", name)
     with open(os.path.join(name, "Makefile"), "w") as f:
         f.write(makefile)
+
+    subprocess.run(["make", "-C", name, "compile_commands.json"],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     if samples:
         for i, test in enumerate(samples, 1):
