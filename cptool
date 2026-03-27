@@ -278,7 +278,7 @@ _cptool() {
     esac
 }
 
-compdef _cptool cptool
+compdef _cptool cptool cpt
 """)
     else:
         print(f"""\
@@ -308,7 +308,7 @@ _cptool() {{
     esac
 }}
 
-complete -F _cptool cptool
+complete -F _cptool cptool cpt
 """)
 
 
