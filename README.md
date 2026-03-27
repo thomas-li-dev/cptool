@@ -22,14 +22,13 @@ cpt pch
 # Create a problem (downloads samples from Competitive Companion)
 cpt problem abc
 
-# Create a problem without downloading
+# Create multiple problems (e.g. for a contest)
+# Downloads from CC; press Ctrl+C when done
+cpt problem A B C D E
+
+# Without downloading
 cpt problem abc --no-download
-
-# Create a contest (downloads all problems from Competitive Companion)
-cpt contest cf2000
-
-# Create a contest without downloading
-cpt contest cf2000 --no-download --count 5
+cpt problem A B C D E --no-download
 ```
 
 Inside a problem directory:

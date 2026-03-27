@@ -2,10 +2,8 @@
 """Competitive Programming CLI tool.
 
 Commands:
-  cptool problem <name>                      Create a problem folder (downloads from Competitive Companion)
-  cptool problem <name> --no-download        Create a problem folder without samples
-  cptool contest <name>                      Create a contest folder (downloads from Competitive Companion)
-  cptool contest <name> --no-download <cnt>  Create a contest folder without samples
+  cptool problem <name...>                Create problem folder(s) (downloads from Competitive Companion)
+  cptool problem <name...> --no-download  Create problem folder(s) without samples
 """
 
 import argparse
@@ -49,17 +47,6 @@ def load_config():
         config.update(user)
     config["template"] = os.path.expanduser(config["template"])
     return config
-
-
-def problem_labels(count):
-    """Generate problem labels: A-Z, then A1, A2, ..."""
-    labels = []
-    for i in range(count):
-        if i < 26:
-            labels.append(chr(ord("A") + i))
-        else:
-            labels.append(f"A{i - 25}")
-    return labels
 
 
 def create_problem(name, config, base_dir=None, samples=None):
@@ -240,7 +227,7 @@ def cmd_completion(args):
         else:
             shell = "bash"
 
-    subcommands = "problem contest pch completion"
+    subcommands = "problem pch completion"
 
     if shell == "zsh":
         print("""\
@@ -249,8 +236,7 @@ def cmd_completion(args):
 _cptool() {
     local -a subcommands
     subcommands=(
-        'problem:Create a problem folder'
-        'contest:Create a contest folder'
+        'problem:Create problem folder(s)'
         'pch:Build precompiled headers for bits/stdc++.h'
         'completion:Print shell completion script'
     )
@@ -266,10 +252,7 @@ _cptool() {
         args)
             case $words[1] in
                 problem)
-                    _arguments '1:name:' '--no-download[Skip downloading samples]'
-                    ;;
-                contest)
-                    _arguments '1:name:' '--no-download[Skip downloading samples]' '--count[Number of problems]:count:'
+                    _arguments '*:name:' '--no-download[Skip downloading samples]'
                     ;;
                 pch)
                     _arguments '--clean[Remove precompiled headers]'
@@ -300,9 +283,6 @@ _cptool() {{
         problem)
             COMPREPLY=($(compgen -W "--no-download" -- "$cur"))
             ;;
-        contest)
-            COMPREPLY=($(compgen -W "--no-download --count" -- "$cur"))
-            ;;
         pch)
             COMPREPLY=($(compgen -W "--clean" -- "$cur"))
             ;;
@@ -317,63 +297,33 @@ complete -F _cptool cptool cpt
 
 
 def cmd_problem(args, config):
-    name = args.name
-    samples = None
-
-    if not args.no_download:
-        problems = listen_for_problems()
-        if not problems:
-            print("No data received.", file=sys.stderr)
-            return
-        samples = problems[0].get("tests", [])
-
-    if create_problem(name, config, samples=samples):
-        print(f"\nCreated problem '{name}/'")
-        print(f"  {name}/{name}.cpp")
-        print(f"  {name}/Makefile")
-        if samples:
-            print(f"  {name}/samples/ ({len(samples)} test cases)")
-            print(f"\nRun 'cd {name} && make && make test' to build and test.")
-
-
-def cmd_contest(args, config):
-    name = args.name
-
-    if os.path.exists(name):
-        print(f"Error: directory '{name}' already exists", file=sys.stderr)
-        return
+    names = args.names
+    multi = len(names) > 1
 
     if args.no_download:
-        if args.count is None:
-            print("Error: --count is required with --no-download", file=sys.stderr)
-            sys.exit(1)
-        count = args.count
-        os.makedirs(name)
-        labels = problem_labels(count)
-        for label in labels:
-            create_problem(label, config, base_dir=name)
-
-        print(f"Created contest '{name}/' with {count} problems:")
-        for label in labels:
-            print(f"  {name}/{label}/{label}.cpp")
+        for name in names:
+            if create_problem(name, config):
+                print(f"Created problem '{name}/'")
     else:
-        problems = listen_for_problems(multi=True)
+        problems = listen_for_problems(multi=multi)
         if not problems:
             print("No data received.", file=sys.stderr)
             return
 
-        os.makedirs(name)
+        if len(problems) < len(names):
+            print(f"Warning: received {len(problems)} problems but expected {len(names)}.",
+                  file=sys.stderr)
 
-        labels = problem_labels(len(problems))
-        for label, data in zip(labels, problems):
+        for name, data in zip(names, problems):
             samples = data.get("tests", [])
-            create_problem(label, config, base_dir=name, samples=samples)
+            if create_problem(name, config, samples=samples):
+                prob_name = data.get("name", "?")
+                n = len(samples)
+                print(f"  {name}: {prob_name} ({n} samples)")
 
-            prob_name = data.get("name", "?")
-            print(f"  {label}: {prob_name} ({len(samples)} samples)")
-
-        print(f"\nCreated contest '{name}/' with {len(problems)} problems.")
-        print(f"Run 'cd {name}/A && make && make test' to build and test problem A.")
+        print(f"\nCreated {len(names)} problem(s).")
+        first = names[0]
+        print(f"Run 'cd {first} && make && make test' to build and test.")
 
 
 def main():
@@ -383,30 +333,15 @@ def main():
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # cptool problem <name> [--no-download]
+    # cptool problem <names...> [--no-download]
     p_prob = sub.add_parser(
         "problem",
-        help="Create a problem folder (downloads samples from Competitive Companion by default)",
+        help="Create problem folder(s) (downloads from Competitive Companion by default)",
     )
-    p_prob.add_argument("name", help="Problem/file name")
+    p_prob.add_argument("names", nargs="+", help="Problem/folder name(s)")
     p_prob.add_argument(
         "--no-download", action="store_true",
         help="Skip downloading samples from Competitive Companion",
-    )
-
-    # cptool contest <name> [--no-download --count N]
-    p_ct = sub.add_parser(
-        "contest",
-        help="Create a contest folder (downloads from Competitive Companion by default)",
-    )
-    p_ct.add_argument("name", help="Contest folder name")
-    p_ct.add_argument(
-        "--no-download", action="store_true",
-        help="Skip downloading from Competitive Companion",
-    )
-    p_ct.add_argument(
-        "--count", type=int, default=None,
-        help="Number of problems (required with --no-download)",
     )
 
     # cptool pch [--clean]
@@ -442,8 +377,6 @@ def main():
 
     if args.command == "problem":
         cmd_problem(args, config)
-    elif args.command == "contest":
-        cmd_contest(args, config)
 
 
 if __name__ == "__main__":

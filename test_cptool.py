@@ -212,7 +212,7 @@ class TestCmdProblem(TempDirMixin, unittest.TestCase):
     def test_problem_no_download_creates_problem(self):
         r = self.run_cptool("problem", "abc", "--no-download")
         self.assertEqual(r.returncode, 0)
-        self.assertIn("abc/abc.cpp", r.stdout)
+        self.assertIn("abc", r.stdout)
         self.assertTrue(os.path.isfile("abc/abc.cpp"))
         self.assertTrue(os.path.isfile("abc/Makefile"))
 
@@ -221,49 +221,12 @@ class TestCmdProblem(TempDirMixin, unittest.TestCase):
         r = self.run_cptool("problem", "abc", "--no-download")
         self.assertIn("already exists", r.stderr)
 
-
-# ---------------------------------------------------------------------------
-# CLI: contest
-# ---------------------------------------------------------------------------
-class TestCmdContest(TempDirMixin, unittest.TestCase):
-    def run_cptool(self, *args):
-        return subprocess.run(
-            [sys.executable, os.path.join(SCRIPT_DIR, "cptool")] + list(args),
-            capture_output=True, text=True,
-        )
-
-    def test_contest_no_download_creates_all_problems(self):
-        r = self.run_cptool("contest", "cf100", "--no-download", "--count", "5")
+    def test_problem_no_download_multiple(self):
+        r = self.run_cptool("problem", "A", "B", "C", "--no-download")
         self.assertEqual(r.returncode, 0)
-        for label in "ABCDE":
-            self.assertTrue(os.path.isdir(f"cf100/{label}"))
-            self.assertTrue(os.path.isfile(f"cf100/{label}/{label}.cpp"))
-            self.assertTrue(os.path.isfile(f"cf100/{label}/Makefile"))
-            with open(f"cf100/{label}/Makefile") as f:
-                self.assertIn(f"PROG = {label}", f.read())
-
-    def test_contest_no_download_duplicate_fails(self):
-        self.run_cptool("contest", "cf100", "--no-download", "--count", "3")
-        r = self.run_cptool("contest", "cf100", "--no-download", "--count", "3")
-        self.assertIn("already exists", r.stderr)
-
-    def test_contest_no_download_single_problem(self):
-        r = self.run_cptool("contest", "single", "--no-download", "--count", "1")
-        self.assertEqual(r.returncode, 0)
-        self.assertTrue(os.path.isfile("single/A/A.cpp"))
-
-    def test_contest_no_download_many_problems(self):
-        r = self.run_cptool("contest", "big", "--no-download", "--count", "28")
-        self.assertEqual(r.returncode, 0)
-        # A-Z plus A1, A2
-        self.assertTrue(os.path.isdir("big/Z"))
-        self.assertTrue(os.path.isdir("big/A1"))
-        self.assertTrue(os.path.isdir("big/A2"))
-
-    def test_contest_no_download_requires_count(self):
-        r = self.run_cptool("contest", "cf100", "--no-download")
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("--count is required", r.stderr)
+        for name in "ABC":
+            self.assertTrue(os.path.isfile(f"{name}/{name}.cpp"))
+            self.assertTrue(os.path.isfile(f"{name}/Makefile"))
 
 
 # ---------------------------------------------------------------------------
@@ -393,24 +356,23 @@ class TestCmdProblemDownload(TempDirMixin, unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# CLI: contest download (end-to-end with simulated CC batch)
+# CLI: multi-problem download (end-to-end with simulated CC)
 # ---------------------------------------------------------------------------
-class TestCmdContestDownload(TempDirMixin, unittest.TestCase):
+class TestCmdMultiProblemDownload(TempDirMixin, unittest.TestCase):
     def run_cptool_bg(self, *args):
         return subprocess.Popen(
             [sys.executable, os.path.join(SCRIPT_DIR, "cptool")] + list(args),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
 
-    def test_contest_download_creates_all_problems(self):
-        proc = self.run_cptool_bg("contest", "cf999")
+    def test_multi_problem_download(self):
+        proc = self.run_cptool_bg("problem", "A", "B", "C")
         time.sleep(0.5)
 
         for i in range(3):
             data = {
                 "name": f"Problem {chr(65+i)}",
                 "tests": [{"input": f"{i}\n", "output": f"{i*10}\n"}],
-                "batch": {"id": "b1", "size": 3},
             }
             conn = http.client.HTTPConnection("127.0.0.1", cptool.CC_PORT)
             conn.request("POST", "/", json.dumps(data), {"Content-Type": "application/json"})
@@ -418,19 +380,21 @@ class TestCmdContestDownload(TempDirMixin, unittest.TestCase):
             conn.close()
             time.sleep(0.2)
 
+        # Send SIGINT to stop the listener (multi mode with no batch info)
+        time.sleep(0.3)
+        proc.send_signal(signal.SIGINT)
         proc.wait(timeout=5)
 
         for label in "ABC":
-            self.assertTrue(os.path.isdir(f"cf999/{label}"))
-            self.assertTrue(os.path.isfile(f"cf999/{label}/{label}.cpp"))
-            self.assertTrue(os.path.isfile(f"cf999/{label}/Makefile"))
-            self.assertTrue(os.path.isfile(f"cf999/{label}/samples/1.in"))
-            self.assertTrue(os.path.isfile(f"cf999/{label}/samples/1.out"))
+            self.assertTrue(os.path.isdir(label))
+            self.assertTrue(os.path.isfile(f"{label}/{label}.cpp"))
+            self.assertTrue(os.path.isfile(f"{label}/Makefile"))
+            self.assertTrue(os.path.isfile(f"{label}/samples/1.in"))
+            self.assertTrue(os.path.isfile(f"{label}/samples/1.out"))
 
-        # Verify sample content for problem C (index 2)
-        with open("cf999/C/samples/1.in") as f:
+        with open("C/samples/1.in") as f:
             self.assertEqual(f.read(), "2\n")
-        with open("cf999/C/samples/1.out") as f:
+        with open("C/samples/1.out") as f:
             self.assertEqual(f.read(), "20\n")
 
 
@@ -658,32 +622,6 @@ class TestMakefilePCH(TempDirMixin, unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# problem_labels
-# ---------------------------------------------------------------------------
-class TestProblemLabels(unittest.TestCase):
-    def test_single(self):
-        self.assertEqual(cptool.problem_labels(1), ["A"])
-
-    def test_five(self):
-        self.assertEqual(cptool.problem_labels(5), ["A", "B", "C", "D", "E"])
-
-    def test_26(self):
-        labels = cptool.problem_labels(26)
-        self.assertEqual(labels[0], "A")
-        self.assertEqual(labels[25], "Z")
-        self.assertEqual(len(labels), 26)
-
-    def test_overflow_past_z(self):
-        labels = cptool.problem_labels(28)
-        self.assertEqual(labels[25], "Z")
-        self.assertEqual(labels[26], "A1")
-        self.assertEqual(labels[27], "A2")
-
-    def test_zero(self):
-        self.assertEqual(cptool.problem_labels(0), [])
-
-
-# ---------------------------------------------------------------------------
 # CLI argument parsing
 # ---------------------------------------------------------------------------
 class TestArgParsing(TempDirMixin, unittest.TestCase):
@@ -701,15 +639,14 @@ class TestArgParsing(TempDirMixin, unittest.TestCase):
         r = self.run_cptool("--help")
         self.assertEqual(r.returncode, 0)
         self.assertIn("problem", r.stdout)
-        self.assertIn("contest", r.stdout)
         self.assertIn("pch", r.stdout)
 
     def test_problem_missing_name(self):
         r = self.run_cptool("problem")
         self.assertNotEqual(r.returncode, 0)
 
-    def test_contest_no_download_non_integer_count(self):
-        r = self.run_cptool("contest", "foo", "--no-download", "--count", "bar")
+    def test_problem_missing_name_with_flag(self):
+        r = self.run_cptool("problem", "--no-download")
         self.assertNotEqual(r.returncode, 0)
 
     def test_invalid_subcommand(self):
